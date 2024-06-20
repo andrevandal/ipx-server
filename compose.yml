@@ -1,0 +1,63 @@
+networks:
+  ipx-local:
+  traefik_public:
+    external: true
+
+x-default-opts: &a1
+  logging:
+    options:
+      max-size: 10m
+
+services:
+  ipx:
+    <<: *a1
+    build:
+      context: .
+      tags:
+        - ipx-server:lastest
+    image: ipx-server
+    restart: unless-stopped
+    ports:
+      - 8080:3000
+    environment:
+      - TZ=${TZ}
+      - IPX_HTTP_DOMAINS=${IPX_HTTP_DOMAINS}
+      - IPX_HTTP_MAX_AGE=${IPX_HTTP_MAX_AGE}
+      - IPX_FS_DIR=${IPX_FS_DIR}
+      - IPX_FS_MAX_AGE=${IPX_FS_MAX_AGE}
+      - S3_ENDPOINT=${S3_ENDPOINT}
+      - S3_PORT=${S3_PORT}
+      - S3_USE_SSL=${S3_USE_SSL}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY}
+      - S3_SECRET_KEY=${S3_SECRET_KEY}
+      - S3_BUCKET=${S3_BUCKET}
+      - CONSOLA_LEVEL=${CONSOLA_LEVEL}
+      - NODE_ENV=${NODE_ENV}
+    volumes:
+      - ./public:/usr/src/app/public
+    networks:
+      - ipx-local
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+  varnish:
+    <<: *a1
+    image: varnish:fresh-alpine
+    networks:
+      - ipx-local
+      - traefik_public
+    depends_on:
+      - ipx
+    volumes:
+      - ./varnish-config.vcl:/etc/varnish/default.vcl
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik_public
+      - traefik.http.routers.varnish-ipx.rule=Host(`ipx.vandal.services`)
+      - traefik.http.routers.varnish-ipx.entrypoints=web
+      - traefik.http.routers.varnish-ipx.middlewares=secure-headers@file,cloudflare-ipallowlist@file,real-ip@file
+      - traefik.http.routers.varnish-ipx.service=varnish-ipx-svc
+      - traefik.http.services.varnish-ipx-svc.loadbalancer.server.port=80

@@ -1,0 +1,27 @@
+{
+  "name": "ipx-server",
+  "module": "src/index.ts",
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/etag": "^1.8.3"
+  },
+  "scripts": {
+    "start": "bun src/index.ts",
+    "dev": "bun --watch src/index.ts",
+    "build": "bun build src/index.ts --outdir ./dist --target bun --sourcemap"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@fastify/accept-negotiator": "^1.1.0",
+    "consola": "^3.2.3",
+    "etag": "^1.8.1",
+    "h3": "^1.11.1",
+    "ipx": "^3.0.1",
+    "listhen": "^1.7.2",
+    "minio": "^8.0.0",
+    "ufo": "^1.5.3"
+  }
+}

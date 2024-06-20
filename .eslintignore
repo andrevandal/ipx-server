@@ -1,0 +1,8 @@
+dist
+.output
+node-modules
+*.log*
+.nitro
+.cache
+.env
+bun.lockb

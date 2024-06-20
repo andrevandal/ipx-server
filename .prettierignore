@@ -1,0 +1,10 @@
+temp
+LICENSE.md
+node_modules
+*.log*
+.nitro
+.cache
+.output
+.env
+dist
+bun.lockb
