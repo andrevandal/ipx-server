@@ -17,8 +17,6 @@ services:
         - ipx-server:lastest
     image: ipx-server
     restart: unless-stopped
-    ports:
-      - 8080:3000
     environment:
       - TZ=${TZ}
       - IPX_HTTP_DOMAINS=${IPX_HTTP_DOMAINS}
