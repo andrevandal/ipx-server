@@ -65,6 +65,8 @@ export async function updateExternalCache({
     name: key,
     data: Buffer.isBuffer(data) ? data : Buffer.from(data),
     format,
-    mtime: mtime ?? new Date()
+    mtime: mtime ?? new Date(),
+    sourceId: id,
+    sourceModifiers: modifiers
   })
 }

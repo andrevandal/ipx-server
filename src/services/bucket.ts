@@ -33,8 +33,17 @@ type UploadProps = {
   data: Buffer
   mtime: Date
   format: string
+  sourceId: string
+  sourceModifiers?: Record<string, any>
 }
-async function put({ name, data, format, mtime }: UploadProps) {
+async function put({
+  name,
+  data,
+  format,
+  mtime,
+  sourceId,
+  sourceModifiers
+}: UploadProps) {
   log.debug(`put: ${name}`)
   if (!client || !S3_BUCKET) {
     return
@@ -45,7 +54,11 @@ async function put({ name, data, format, mtime }: UploadProps) {
   }
   const metaData = {
     'Content-Type': `image/${format}`,
-    'Last-Modified': mtime.toUTCString()
+    'Last-Modified': mtime.toUTCString(),
+    sourceId: sourceId,
+    sourceModifiers: Array.from(Object.entries(sourceModifiers ?? {}))
+      .map((el) => el.join(':'))
+      .join('|')
   }
   const response = await client.putObject(
     S3_BUCKET,
