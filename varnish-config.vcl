@@ -4,17 +4,22 @@ import std;
 import directors;
 
 backend backend1 {
-  .host = "ipx-1";
+  .host = "ipx-server-ipx-1";
   .port = "3000";
 }
 
 backend backend2 {
-  .host = "ipx-2";
+  .host = "ipx-server-ipx-2";
   .port = "3000";
 }
 
 backend backend3 {
-  .host = "ipx-3";
+  .host = "ipx-server-ipx-3";
+  .port = "3000";
+}
+
+backend backend4 {
+  .host = "ipx-server-ipx-3";
   .port = "3000";
 }
 
@@ -22,7 +27,8 @@ sub vcl_init {
   new vdir = directors.round_robin();
   vdir.add_backend(backend1);
   vdir.add_backend(backend2);
-  vdir.add_backend(backend3);    
+  vdir.add_backend(backend3);
+  vdir.add_backend(backend4);
 }
 
 sub vcl_recv {

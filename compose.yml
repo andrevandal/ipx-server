@@ -36,10 +36,10 @@ services:
     networks:
       - ipx-local
     deploy:
-      replicas: 3
+      replicas: 4
       resources:
         limits:
-          cpus: "0.5"
+          cpus: "1"
           memory: 512M
   varnish:
     <<: *a1
