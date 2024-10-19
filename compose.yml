@@ -1,16 +1,5 @@
-networks:
-  ipx-local:
-  traefik_public:
-    external: true
-
-x-default-opts: &a1
-  logging:
-    options:
-      max-size: 10m
-
 services:
   ipx:
-    <<: *a1
     build:
       context: .
       tags:
@@ -33,29 +22,8 @@ services:
       - NODE_ENV=${NODE_ENV}
     volumes:
       - ./public:/usr/src/app/public
-    networks:
-      - ipx-local
     deploy:
-      replicas: 4
       resources:
         limits:
           cpus: "1"
           memory: 512M
-  varnish:
-    <<: *a1
-    image: varnish:fresh-alpine
-    networks:
-      - ipx-local
-      - traefik_public
-    depends_on:
-      - ipx
-    volumes:
-      - ./varnish-config.vcl:/etc/varnish/default.vcl
-    labels:
-      - traefik.enable=true
-      - traefik.docker.network=traefik_public
-      - traefik.http.routers.varnish-ipx.rule=Host(`ipx.vandal.services`)
-      - traefik.http.routers.varnish-ipx.entrypoints=web
-      - traefik.http.routers.varnish-ipx.middlewares=secure-headers@file,cloudflare-ipallowlist@file,real-ip@file
-      - traefik.http.routers.varnish-ipx.service=varnish-ipx-svc
-      - traefik.http.services.varnish-ipx-svc.loadbalancer.server.port=80
