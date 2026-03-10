@@ -106,7 +106,7 @@ async function get(params: GetProps) {
       })) ?? {}
 
   localLog.debug(
-    `etag: ${etag} lastModified: ${lastModified} metaData: ${metaData}`
+    `etag: ${etag} lastModified: ${lastModified} metaData: ${JSON.stringify(metaData)}`
   )
 
   if (!etag || !lastModified || !metaData) {

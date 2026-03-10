@@ -28,3 +28,7 @@ export const S3_USE_SSL = process.env?.S3_USE_SSL
 export const S3_ACCESS_KEY = process.env?.S3_ACCESS_KEY
 export const S3_SECRET_KEY = process.env?.S3_SECRET_KEY
 export const S3_BUCKET = process.env?.S3_BUCKET
+
+export const IPX_MAX_CONCURRENT = process.env?.IPX_MAX_CONCURRENT
+  ? parseInt(process.env.IPX_MAX_CONCURRENT)
+  : 3

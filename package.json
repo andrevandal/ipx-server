@@ -4,7 +4,7 @@
   "type": "module",
   "devDependencies": {
     "@types/bun": "latest",
-    "@types/etag": "^1.8.3"
+    "@types/etag": "^1.8.4"
   },
   "scripts": {
     "start": "bun src/index.ts",
@@ -12,16 +12,16 @@
     "build": "bun build src/index.ts --outdir ./dist --target bun --sourcemap"
   },
   "peerDependencies": {
-    "typescript": "^5.0.0"
+    "typescript": "^5.4.5"
   },
   "dependencies": {
     "@fastify/accept-negotiator": "^1.1.0",
-    "consola": "^3.2.3",
+    "consola": "^3.4.2",
     "etag": "^1.8.1",
-    "h3": "^1.11.1",
-    "ipx": "^3.0.1",
-    "listhen": "^1.7.2",
-    "minio": "^8.0.0",
-    "ufo": "^1.5.3"
+    "h3": "^1.15.6",
+    "ipx": "^3.1.1",
+    "listhen": "^1.9.0",
+    "minio": "^8.0.7",
+    "ufo": "^1.6.3"
   }
 }

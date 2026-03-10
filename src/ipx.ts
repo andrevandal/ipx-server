@@ -22,12 +22,46 @@ import {
 const MODIFIER_SEP = /[&,]/g
 const MODIFIER_VAL_SEP = /[:=_]/
 
-import { IPX_FS_DIR } from './services/env'
+import { IPX_FS_DIR, IPX_MAX_CONCURRENT } from './services/env'
 import logger from './services/logger'
+import { createSemaphore } from './services/semaphore'
+
+const semaphore = createSemaphore(IPX_MAX_CONCURRENT)
+
+// --- In-flight deduplication ---
+type ProcessResult = Awaited<ReturnType<ReturnType<IPX>['process']>>
+const inFlight = new Map<string, Promise<ProcessResult>>()
+
+async function processWithDedup(
+  key: string,
+  img: ReturnType<IPX>
+): Promise<{ result: ProcessResult; isOwner: boolean }> {
+  const existing = inFlight.get(key)
+  if (existing) {
+    return { result: await existing, isOwner: false }
+  }
+
+  const promise = (async () => {
+    await semaphore.acquire()
+    try {
+      return await img.process()
+    } finally {
+      semaphore.release()
+    }
+  })()
+
+  inFlight.set(key, promise)
+  try {
+    const result = await promise
+    return { result, isOwner: true }
+  } finally {
+    inFlight.delete(key)
+  }
+}
 
 export function createIPXH3Handler(ipx: IPX) {
   const _handler = async (event: H3Event) => {
-    // Handle favicon
+    // Handle faviconmetaData
     if (/^\/favicon.(svg|ico)$/i.exec(event.path)) {
       return handleFavicon
     }
@@ -83,9 +117,21 @@ export function createIPXH3Handler(ipx: IPX) {
     })
 
     // grab image from cache or process a new one
-    const { data, format } = cachedData
-      ? { data: cachedData.data, format: cachedData.format }
-      : await img.process()
+    let data: Buffer | string
+    let format = ''
+    let isOwner = false
+
+    if (cachedData) {
+      data = cachedData.data
+      format = cachedData.format
+    } else {
+      const dedupKey = `${id}:${JSON.stringify(modifiers)}`
+      const processed = await processWithDedup(dedupKey, img)
+      data = processed.result.data
+      if(processed.result.format)
+        format = processed.result.format
+      isOwner = processed.isOwner
+    }
 
     // Generate and send ETag header
     const etag = cachedData?.etag ?? getEtag(data)
@@ -102,7 +148,8 @@ export function createIPXH3Handler(ipx: IPX) {
       sendResponseHeaderIfNotSet(event, 'content-type', `image/${format}`)
     }
 
-    if (!cachedData) {
+    // Only the dedup owner writes to S3 — sharers skip to avoid duplicate writes
+    if (!cachedData && isOwner) {
       await updateExternalCache({
         id,
         modifiers,

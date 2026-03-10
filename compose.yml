@@ -20,6 +20,7 @@ services:
       - S3_BUCKET=${S3_BUCKET}
       - CONSOLA_LEVEL=${CONSOLA_LEVEL}
       - NODE_ENV=${NODE_ENV}
+      - IPX_MAX_CONCURRENT=${IPX_MAX_CONCURRENT}
     volumes:
       - ./public:/usr/src/app/public
     deploy:
