@@ -25,11 +25,7 @@ const ipx = createIPX({
   })
 })
 
-const app = createApp({
-  onRequest(event) {
-    log.info(`Request: ${event.node.req.method} ${event.node.req.url}`)
-  }
-})
+const app = createApp()
 app.use('/health', defineEventHandler((event) => {
   setResponseHeader(event, 'content-type', 'application/json')
   return { status: 'ok' }

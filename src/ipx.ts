@@ -95,7 +95,6 @@ export function createIPXH3Handler(ipx: IPX) {
       const _ifModifiedSince = getRequestHeader(event, 'if-modified-since')
       if (_ifModifiedSince && new Date(_ifModifiedSince) >= sourceMeta.mtime) {
         setResponseStatus(event, 304)
-        logger.withTag('request').info(`use cache plz: ${id}`)
         return send(event)
       }
     }
@@ -126,7 +125,11 @@ export function createIPXH3Handler(ipx: IPX) {
       format = cachedData.format
     } else {
       const dedupKey = `${id}:${JSON.stringify(modifiers)}`
+      const t0 = performance.now()
       const processed = await processWithDedup(dedupKey, img)
+      const elapsed = performance.now() - t0
+      if (elapsed > 20_000)
+        logger.withTag('perf').warn(`slow transform (${(elapsed / 1000).toFixed(1)}s): ${id} ${JSON.stringify(modifiers)}`)
       data = processed.result.data
       if(processed.result.format)
         format = processed.result.format
@@ -168,6 +171,8 @@ export function createIPXH3Handler(ipx: IPX) {
       return await _handler(event)
     } catch (_error: unknown) {
       const error = createError(_error as H3Error)
+      if (error.statusCode >= 500)
+        logger.withTag('error').error(`[${error.statusCode}] ${error.message}`)
       setResponseStatus(event, error.statusCode, error.statusMessage)
       return {
         error: {
