@@ -1,6 +1,6 @@
 import { listen } from 'listhen'
 import logger from './services/logger'
-import { createApp, toNodeListener } from 'h3'
+import { createApp, toNodeListener, defineEventHandler, setResponseHeader } from 'h3'
 import { createIPX, ipxFSStorage, ipxHttpStorage } from 'ipx'
 import { createIPXH3Handler } from './ipx'
 
@@ -30,6 +30,10 @@ const app = createApp({
     log.info(`Request: ${event.node.req.method} ${event.node.req.url}`)
   }
 })
+app.use('/health', defineEventHandler((event) => {
+  setResponseHeader(event, 'content-type', 'application/json')
+  return { status: 'ok' }
+}))
 app.use('/', createIPXH3Handler(ipx))
 listen(toNodeListener(app), { showURL: false })
 log.success('Ready.')
