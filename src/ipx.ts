@@ -35,17 +35,24 @@ const inFlight = new Map<string, Promise<ProcessResult>>()
 async function processWithDedup(
   key: string,
   img: ReturnType<IPX>
-): Promise<{ result: ProcessResult; isOwner: boolean }> {
+): Promise<{ result: ProcessResult; isOwner: boolean; queueMs: number; processMs: number }> {
   const existing = inFlight.get(key)
   if (existing) {
-    return { result: await existing, isOwner: false }
+    return { result: await existing, isOwner: false, queueMs: 0, processMs: 0 }
   }
 
+  let queueMs = 0
+  let processMs = 0
+
   const promise = (async () => {
+    const t0 = performance.now()
     await semaphore.acquire()
+    queueMs = performance.now() - t0
+    const t1 = performance.now()
     try {
       return await img.process()
     } finally {
+      processMs = performance.now() - t1
       semaphore.release()
     }
   })()
@@ -53,7 +60,7 @@ async function processWithDedup(
   inFlight.set(key, promise)
   try {
     const result = await promise
-    return { result, isOwner: true }
+    return { result, isOwner: true, queueMs, processMs }
   } finally {
     inFlight.delete(key)
   }
@@ -125,11 +132,10 @@ export function createIPXH3Handler(ipx: IPX) {
       format = cachedData.format
     } else {
       const dedupKey = `${id}:${JSON.stringify(modifiers)}`
-      const t0 = performance.now()
       const processed = await processWithDedup(dedupKey, img)
-      const elapsed = performance.now() - t0
-      if (elapsed > 20_000)
-        logger.withTag('perf').warn(`slow transform (${(elapsed / 1000).toFixed(1)}s): ${id} ${JSON.stringify(modifiers)}`)
+      const { queueMs, processMs } = processed
+      if (queueMs + processMs > 20_000)
+        logger.withTag('perf').warn(`slow transform (queue: ${(queueMs / 1000).toFixed(1)}s, process: ${(processMs / 1000).toFixed(1)}s): ${id} ${JSON.stringify(modifiers)}`)
       data = processed.result.data
       if(processed.result.format)
         format = processed.result.format
@@ -172,7 +178,7 @@ export function createIPXH3Handler(ipx: IPX) {
     } catch (_error: unknown) {
       const error = createError(_error as H3Error)
       if (error.statusCode >= 500)
-        logger.withTag('error').error(`[${error.statusCode}] ${error.message}`)
+        logger.withTag('error').error(`[${error.statusCode}] ${error.message} — ${event.path}`)
       setResponseStatus(event, error.statusCode, error.statusMessage)
       return {
         error: {
