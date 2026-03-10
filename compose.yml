@@ -6,6 +6,8 @@ services:
         - ipx-server:lastest
     image: ipx-server
     restart: unless-stopped
+    networks:
+      - coolify
     environment:
       - TZ=${TZ}
       - IPX_HTTP_DOMAINS=${IPX_HTTP_DOMAINS}
@@ -29,8 +31,24 @@ services:
       timeout: 5s
       retries: 2
       start_period: 10s
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.ipx-http.entryPoints=http
+      - traefik.http.routers.ipx-http.rule=Host(`ipx.vandal.services`) && PathPrefix(`/`)
+      - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
+      - traefik.http.routers.ipx-http.middlewares=redirect-to-https
+      - traefik.http.routers.ipx-https.entryPoints=https
+      - traefik.http.routers.ipx-https.rule=Host(`ipx.vandal.services`) && PathPrefix(`/`)
+      - traefik.http.routers.ipx-https.tls=true
+      - traefik.http.routers.ipx-https.tls.certresolver=letsencrypt
+      - traefik.http.services.ipx.loadbalancer.server.port=3000
     deploy:
+      replicas: 3
       resources:
         limits:
           cpus: "1"
           memory: 2048M
+
+networks:
+  coolify:
+    external: true
