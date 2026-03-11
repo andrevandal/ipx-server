@@ -24,7 +24,6 @@ import {
 const MODIFIER_SEP = /[&,]/g
 const MODIFIER_VAL_SEP = /[:=_]/
 
-import { IPX_FS_DIR } from './services/env'
 import logger from './services/logger'
 import {
   processWithDedup,
@@ -203,9 +202,9 @@ function safeString(input: string) {
 }
 
 async function handleFavicon(event: H3Event) {
-  const path = `${IPX_FS_DIR}${event.path}`
+  const path = `${import.meta.dir}/../public${event.path}`
   const file = Bun.file(path)
-  if (!file) {
+  if (!(await file.exists())) {
     throw createError({
       statusCode: 404,
       statusText: `IPX_FILE_NOT_FOUND`,
