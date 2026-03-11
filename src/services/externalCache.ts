@@ -37,8 +37,17 @@ function buildCacheKey(id: string, modifiers: Record<string, string> | undefined
   return `${fsPath}/${modStr}`
 }
 
-function getModifierFormat(modifiers: Record<string, string> | undefined): string {
-  return modifiers?.format ?? modifiers?.f ?? 'unknown'
+function inferFormatFromSource(id: string): string {
+  const ext = id.split('?')[0].split('.').pop()?.toLowerCase()
+  if (!ext) return 'unknown'
+  if (ext === 'jpg') return 'jpeg'
+  return ['png', 'jpeg', 'webp', 'avif', 'tiff', 'gif', 'heif'].includes(ext) ? ext : 'unknown'
+}
+
+// Resolve the cache format: explicit modifier wins, then source URL extension, then 'unknown'.
+// Note: f_auto is already resolved to a concrete format before this is called.
+function resolveFormat(id: string, modifiers: Record<string, string> | undefined): string {
+  return modifiers?.format ?? modifiers?.f ?? inferFormatFromSource(id)
 }
 
 type RetrieveExternalCacheProps = {
@@ -51,14 +60,14 @@ export async function retrieveExternalCache({
   modifiers
 }: RetrieveExternalCacheProps) {
   const key = buildCacheKey(id, modifiers)
-  const format = getModifierFormat(modifiers)
+  const format = resolveFormat(id, modifiers)
   const cached = await bucketService.get({ name: key, format })
 
   if (!cached) {
-    log.info(`skipped external cache: ${key}`)
+    log.debug(`skipped external cache: ${key}`)
     return
   }
-  log.info(`retrieve external cache: ${key}`)
+  log.debug(`retrieve external cache: ${key}`)
   return { format, ...cached }
 }
 
@@ -68,14 +77,14 @@ export async function retrieveExternalCacheUrl({
   mtime
 }: RetrieveExternalCacheProps) {
   const key = buildCacheKey(id, modifiers)
-  const format = getModifierFormat(modifiers)
+  const format = resolveFormat(id, modifiers)
   const url = await bucketService.getUrl({ name: key, format, sourceMtime: mtime })
 
   if (!url) {
-    log.info(`skipped external cache url: ${key}`)
+    log.debug(`skipped external cache url: ${key}`)
     return
   }
-  log.info(`retrieve external cache url: ${key}`)
+  log.debug(`retrieve external cache url: ${key}`)
   return { url, format }
 }
 
@@ -87,11 +96,12 @@ export async function updateExternalCache({
   id,
   modifiers,
   mtime,
-  data
+  data,
+  format: formatOverride
 }: UpdateExternalCacheProps) {
   const key = buildCacheKey(id, modifiers)
-  log.info(`update external cache: ${key}`)
-  const format = getModifierFormat(modifiers)
+  log.debug(`update external cache: ${key}`)
+  const format = formatOverride || resolveFormat(id, modifiers)
   return bucketService.put({
     name: key,
     data: Buffer.isBuffer(data) ? data : Buffer.from(data),

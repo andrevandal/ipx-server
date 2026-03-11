@@ -72,7 +72,7 @@ export function scheduleBackgroundProcess(
 ) {
   const dedupKey = buildDedupKey(id, modifiers)
   if (inFlight.has(dedupKey)) {
-    log.info(`already in-flight, skipping: ${id}`)
+    log.debug(`already in-flight, skipping: ${id}`)
     return
   }
 
@@ -89,7 +89,8 @@ export function scheduleBackgroundProcess(
           id,
           modifiers,
           mtime: sourceMeta.mtime,
-          data: result.data
+          data: result.data,
+          format: result.format
         })
     })
     .catch((err) =>

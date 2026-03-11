@@ -68,7 +68,7 @@ export function createIPXH3Handler(ipx: IPX) {
       // Cache hit — proxy the S3 response so CF caches content at the ipx URL (not a visible redirect)
       const cachedUrl = await retrieveExternalCacheUrl({ id, modifiers, ...sourceMeta })
       if (cachedUrl) {
-        logger.withTag('cache').info(`hit: ${id}`)
+        logger.withTag('cache').debug(`hit: ${id}`)
         const upstream = await fetch(cachedUrl.url)
         if (!upstream.ok) throw new Error(`S3 fetch failed: ${upstream.status}`)
         sendResponseHeaderIfNotSet(event, 'content-type', `image/${cachedUrl.format}`)
@@ -120,7 +120,8 @@ export function createIPXH3Handler(ipx: IPX) {
         modifiers,
         mtime: sourceMeta.mtime,
         maxAge: sourceMeta.maxAge,
-        data
+        data,
+        format
       })
     }
 
@@ -220,7 +221,10 @@ async function getIdAndModifiesFromEvent(event: H3Event) {
     .slice(1 /* leading slash */)
     .split('/')
 
-  const id = safeString(decode(idSegments.join('/')))
+  // Proxies and browsers normalize `//` → `/` in paths, so `https://host`
+  // arrives as `https:/host`. Restore the double slash if stripped.
+  const rawId = idSegments.join('/').replace(/^(https?):\/([^/])/, '$1://$2')
+  const id = safeString(decode(rawId))
 
   if (!modifiersString) {
     throw createError({

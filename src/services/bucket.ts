@@ -170,7 +170,7 @@ async function getUrl({ name, format, sourceMtime, expirySeconds = 3600 }: GetUr
   if (sourceMtime && stat.metaData?.['last-modified']) {
     const cachedMtime = new Date(stat.metaData['last-modified'])
     if (cachedMtime.getTime() !== sourceMtime.getTime()) {
-      localLog.info(`stale: ${objectName}`)
+      localLog.debug(`stale: ${objectName}`)
       return undefined
     }
   }
