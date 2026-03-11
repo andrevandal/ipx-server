@@ -37,45 +37,49 @@ function buildCacheKey(id: string, modifiers: Record<string, string> | undefined
   return `${fsPath}/${modStr}`
 }
 
-type RetriveExternalCacheProps = {
+function getModifierFormat(modifiers: Record<string, string> | undefined): string {
+  return modifiers?.format ?? modifiers?.f ?? 'unknown'
+}
+
+type RetrieveExternalCacheProps = {
   id: string
   modifiers: Parameters<IPX>[1]
 } & Awaited<ReturnType<ReturnType<IPX>['getSourceMeta']>>
 
-export async function retriveExternalCache({
+export async function retrieveExternalCache({
   id,
   modifiers
-}: RetriveExternalCacheProps) {
+}: RetrieveExternalCacheProps) {
   const key = buildCacheKey(id, modifiers)
-  const format = modifiers?.format ?? modifiers?.f ?? 'unknown'
+  const format = getModifierFormat(modifiers)
   const cached = await bucketService.get({ name: key, format })
 
   if (!cached) {
     log.info(`skipped external cache: ${key}`)
     return
   }
-  log.info(`retrive external cache: ${key}`)
+  log.info(`retrieve external cache: ${key}`)
   return { format, ...cached }
 }
 
-export async function retriveExternalCacheUrl({
+export async function retrieveExternalCacheUrl({
   id,
   modifiers,
   mtime
-}: RetriveExternalCacheProps) {
+}: RetrieveExternalCacheProps) {
   const key = buildCacheKey(id, modifiers)
-  const format = modifiers?.format ?? modifiers?.f ?? 'unknown'
+  const format = getModifierFormat(modifiers)
   const url = await bucketService.getUrl({ name: key, format, sourceMtime: mtime })
 
   if (!url) {
     log.info(`skipped external cache url: ${key}`)
     return
   }
-  log.info(`retrive external cache url: ${key}`)
+  log.info(`retrieve external cache url: ${key}`)
   return { url, format }
 }
 
-type UpdateExternalCacheProps = RetriveExternalCacheProps & {
+type UpdateExternalCacheProps = RetrieveExternalCacheProps & {
   data: Buffer | string
   format?: string
 }
@@ -87,7 +91,7 @@ export async function updateExternalCache({
 }: UpdateExternalCacheProps) {
   const key = buildCacheKey(id, modifiers)
   log.info(`update external cache: ${key}`)
-  const format = modifiers?.format ?? modifiers?.f ?? 'unknown'
+  const format = getModifierFormat(modifiers)
   return bucketService.put({
     name: key,
     data: Buffer.isBuffer(data) ? data : Buffer.from(data),

@@ -16,8 +16,8 @@ import {
 } from 'h3'
 import type { IPX } from 'ipx'
 import {
-  retriveExternalCache,
-  retriveExternalCacheUrl,
+  retrieveExternalCache,
+  retrieveExternalCacheUrl,
   updateExternalCache
 } from './services/externalCache'
 
@@ -26,41 +26,29 @@ const MODIFIER_VAL_SEP = /[:=_]/
 
 import { IPX_FS_DIR } from './services/env'
 import logger from './services/logger'
-import { processWithDedup, scheduleBackgroundProcess } from './services/processor'
+import {
+  processWithDedup,
+  scheduleBackgroundProcess,
+  buildDedupKey,
+  warnIfSlowTransform
+} from './services/processor'
 
 export function createIPXH3Handler(ipx: IPX) {
   const _handler = async (event: H3Event) => {
-    // Handle faviconmetaData
     if (/^\/favicon.(svg|ico)$/i.exec(event.path)) {
-      return handleFavicon
+      return handleFavicon(event)
     }
 
-    // Get id and modifiers
     const { id, modifiers } = await getIdAndModifiesFromEvent(event)
-
-    // Create request
     const img = ipx(id, modifiers)
-
-    // Get image meta from source
     const sourceMeta = await img.getSourceMeta()
 
     // Send CSP headers to prevent XSS
-    sendResponseHeaderIfNotSet(
-      event,
-      'content-security-policy',
-      "default-src 'none'"
-    )
+    sendResponseHeaderIfNotSet(event, 'content-security-policy', "default-src 'none'")
 
-    // Handle modified time if available
     if (sourceMeta.mtime) {
-      // Send Last-Modified header
-      sendResponseHeaderIfNotSet(
-        event,
-        'last-modified',
-        sourceMeta.mtime.toUTCString()
-      )
+      sendResponseHeaderIfNotSet(event, 'last-modified', sourceMeta.mtime.toUTCString())
 
-      // Check for last-modified request header
       const _ifModifiedSince = getRequestHeader(event, 'if-modified-since')
       if (_ifModifiedSince && new Date(_ifModifiedSince) >= sourceMeta.mtime) {
         setResponseStatus(event, 304)
@@ -68,7 +56,6 @@ export function createIPXH3Handler(ipx: IPX) {
       }
     }
 
-    // Send Cache-Control header
     if (typeof sourceMeta.maxAge === 'number') {
       sendResponseHeaderIfNotSet(
         event,
@@ -77,11 +64,9 @@ export function createIPXH3Handler(ipx: IPX) {
       )
     }
 
-    const isHttpSource = id.startsWith('http://') || id.startsWith('https://')
-
-    if (isHttpSource) {
+    if (isHttpUrl(id)) {
       // Cache hit — proxy the S3 response so CF caches content at the ipx URL (not a visible redirect)
-      const cachedUrl = await retriveExternalCacheUrl({ id, modifiers, ...sourceMeta })
+      const cachedUrl = await retrieveExternalCacheUrl({ id, modifiers, ...sourceMeta })
       if (cachedUrl) {
         logger.withTag('cache').info(`hit: ${id}`)
         const upstream = await fetch(cachedUrl.url)
@@ -93,13 +78,12 @@ export function createIPXH3Handler(ipx: IPX) {
       // Cache miss — schedule background transform, serve raw source immediately
       logger.withTag('cache').info(`miss, serving raw: ${id}`)
       scheduleBackgroundProcess(img, id, modifiers, sourceMeta)
-      setResponseHeader(event, 'cache-control', 'no-store')
-      setResponseHeader(event, 'cloudflare-cdn-cache-control', 'no-store')
+      setNoCacheHeaders(event)
       return sendRedirect(event, id, 307)
     }
 
     // FS sources — sync path: process, stream, and cache
-    const cachedData = await retriveExternalCache({ id, modifiers, ...sourceMeta })
+    const cachedData = await retrieveExternalCache({ id, modifiers, ...sourceMeta })
 
     let data: Buffer | string
     let format = ''
@@ -109,11 +93,9 @@ export function createIPXH3Handler(ipx: IPX) {
       data = cachedData.data
       format = cachedData.format
     } else {
-      const dedupKey = `${id}:${JSON.stringify(modifiers)}`
-      const processed = await processWithDedup(dedupKey, img)
+      const processed = await processWithDedup(buildDedupKey(id, modifiers), img)
       const { queueMs, processMs } = processed
-      if (queueMs + processMs > 20_000)
-        logger.withTag('perf').warn(`slow transform (queue: ${(queueMs / 1000).toFixed(1)}s, process: ${(processMs / 1000).toFixed(1)}s): ${id} ${JSON.stringify(modifiers)}`)
+      warnIfSlowTransform(queueMs, processMs, id, modifiers)
       data = processed.result.data
       if (processed.result.format)
         format = processed.result.format
@@ -155,8 +137,7 @@ export function createIPXH3Handler(ipx: IPX) {
       const rawUrl = extractRawSourceUrl(event.path)
       if (rawUrl) {
         logger.withTag('fallback').warn(`error recovery, serving raw: ${rawUrl}`)
-        setResponseHeader(event, 'cache-control', 'no-store')
-        setResponseHeader(event, 'cloudflare-cdn-cache-control', 'no-store')
+        setNoCacheHeaders(event)
         return sendRedirect(event, rawUrl, 307)
       }
 
@@ -172,13 +153,20 @@ export function createIPXH3Handler(ipx: IPX) {
   })
 }
 
-// --- Utils ---
+function isHttpUrl(url: string): boolean {
+  return url.startsWith('http://') || url.startsWith('https://')
+}
+
+function setNoCacheHeaders(event: H3Event): void {
+  setResponseHeader(event, 'cache-control', 'no-store')
+  setResponseHeader(event, 'cloudflare-cdn-cache-control', 'no-store')
+}
 
 function extractRawSourceUrl(path: string): string | undefined {
   try {
     const [, ...idSegments] = path.slice(1).split('/')
     const id = safeString(decode(idSegments.join('/')))
-    if (id.startsWith('http://') || id.startsWith('https://')) return id
+    if (isHttpUrl(id)) return id
   } catch {}
   return undefined
 }
@@ -228,14 +216,12 @@ async function handleFavicon(event: H3Event) {
 }
 
 async function getIdAndModifiesFromEvent(event: H3Event) {
-  // Parse URL
   const [modifiersString = '', ...idSegments] = event.path
     .slice(1 /* leading slash */)
     .split('/')
 
   const id = safeString(decode(idSegments.join('/')))
 
-  // Validate
   if (!modifiersString) {
     throw createError({
       statusCode: 400,
@@ -251,10 +237,8 @@ async function getIdAndModifiesFromEvent(event: H3Event) {
     })
   }
 
-  // Contruct modifiers
   const modifiers: Record<string, string> = Object.create(null)
 
-  // Read modifiers from first segment
   if (modifiersString !== '_') {
     for (const p of modifiersString.split(MODIFIER_SEP)) {
       const [key, ...values] = p.split(MODIFIER_VAL_SEP)
@@ -264,7 +248,6 @@ async function getIdAndModifiesFromEvent(event: H3Event) {
     }
   }
 
-  // Auto format
   const mFormat = modifiers.f || modifiers.format
   if (mFormat === 'auto') {
     const acceptHeader = getRequestHeader(event, 'accept') ?? ''

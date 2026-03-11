@@ -13,6 +13,20 @@ export type SourceMeta = Awaited<ReturnType<ReturnType<IPX>['getSourceMeta']>>
 
 const inFlight = new Map<string, Promise<ProcessResult>>()
 
+export function buildDedupKey(id: string, modifiers: Record<string, string>): string {
+  return `${id}:${JSON.stringify(modifiers)}`
+}
+
+export function warnIfSlowTransform(
+  queueMs: number,
+  processMs: number,
+  id: string,
+  modifiers: Record<string, string>
+): void {
+  if (queueMs + processMs > 20_000)
+    logger.withTag('perf').warn(`slow transform (queue: ${(queueMs / 1000).toFixed(1)}s, process: ${(processMs / 1000).toFixed(1)}s): ${id} ${JSON.stringify(modifiers)}`)
+}
+
 export async function processWithDedup(
   key: string,
   img: ReturnType<IPX>
@@ -56,7 +70,7 @@ export function scheduleBackgroundProcess(
   modifiers: Record<string, string>,
   sourceMeta: SourceMeta
 ) {
-  const dedupKey = `${id}:${JSON.stringify(modifiers)}`
+  const dedupKey = buildDedupKey(id, modifiers)
   if (inFlight.has(dedupKey)) {
     log.info(`already in-flight, skipping: ${id}`)
     return
@@ -66,10 +80,9 @@ export function scheduleBackgroundProcess(
 
   processWithDedup(dedupKey, img)
     .then(async ({ result, isOwner, queueMs, processMs }) => {
+      warnIfSlowTransform(queueMs, processMs, id, modifiers)
       const totalMs = queueMs + processMs
-      if (totalMs > 20_000)
-        logger.withTag('perf').warn(`slow transform (queue: ${(queueMs / 1000).toFixed(1)}s, process: ${(processMs / 1000).toFixed(1)}s): ${id} ${JSON.stringify(modifiers)}`)
-      else
+      if (totalMs <= 20_000)
         log.info(`transform complete (${(totalMs / 1000).toFixed(1)}s): ${id}`)
       if (isOwner)
         await updateExternalCache({

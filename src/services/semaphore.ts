@@ -8,8 +8,9 @@ export function createSemaphore(slots: number) {
     return new Promise<void>((res) => queue.push(res))
   }
   const release = () => {
-    slots++
-    queue.shift()?.()
+    const next = queue.shift()
+    if (next) next()
+    else slots++
   }
   return { acquire, release }
 }
