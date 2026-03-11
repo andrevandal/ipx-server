@@ -83,7 +83,7 @@ export function scheduleBackgroundProcess(
       warnIfSlowTransform(queueMs, processMs, id, modifiers)
       const totalMs = queueMs + processMs
       if (totalMs <= 20_000)
-        log.info(`transform complete (${(totalMs / 1000).toFixed(1)}s): ${id}`)
+        log.info(`transform complete (${(totalMs / 1000).toFixed(1)}s): ${id} ${JSON.stringify(modifiers)}`)
       if (isOwner)
         await updateExternalCache({
           id,
