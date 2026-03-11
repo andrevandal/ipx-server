@@ -144,9 +144,44 @@ async function get(params: GetProps) {
   }
 }
 
+type GetUrlProps = {
+  name: string
+  format: string
+  sourceMtime?: Date
+  expirySeconds?: number
+}
+async function getUrl({ name, format, sourceMtime, expirySeconds = 3600 }: GetUrlProps) {
+  const localLog = log.withTag('getUrl')
+  localLog.debug(`${name}.${format}`)
+  if (!client || !S3_BUCKET) return undefined
+
+  const objectName = `${name}.${format}`
+  const stat = await client
+    .statObject(S3_BUCKET, objectName)
+    .catch((err) => {
+      if (err instanceof Error && !err.message.includes('Not Found'))
+        localLog.error(err)
+      return undefined
+    })
+
+  if (!stat) return undefined
+
+  // Validate freshness: if source has changed since we cached, treat as miss
+  if (sourceMtime && stat.metaData?.['last-modified']) {
+    const cachedMtime = new Date(stat.metaData['last-modified'])
+    if (cachedMtime.getTime() !== sourceMtime.getTime()) {
+      localLog.info(`stale: ${objectName}`)
+      return undefined
+    }
+  }
+
+  return client.presignedGetObject(S3_BUCKET, objectName, expirySeconds)
+}
+
 const bucketService = {
   put,
-  get
+  get,
+  getUrl
 }
 
 export default bucketService
